@@ -1,24 +1,57 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+class TagEntry {
+  final String devName;
+  final String displayName;
+  final int order;
+
+  TagEntry({
+    required this.devName,
+    required this.displayName,
+    required this.order,
+  });
+
+  factory TagEntry.fromFirestore(String key, dynamic value) {
+    String displayName;
+    int order = 9999; // Default high value for unsorted tags
+
+    if (value is Map) {
+      displayName = value['display'] as String? ?? '';
+      order = value['order'] as int? ?? 9999;
+    } else if (value is String) {
+      // Legacy support for old data format
+      displayName = value;
+    } else {
+      displayName = '';
+    }
+
+    return TagEntry(
+      devName: key,
+      displayName: displayName,
+      order: order,
+    );
+  }
+}
+
 class TagsNotifierState {
-  final Map<String, Map<String, String>> tagMaps;
+  final Map<String, Map<String, dynamic>> rawTagData;
   final bool isLoading;
   final String? error;
 
   TagsNotifierState({
-    required this.tagMaps,
+    required this.rawTagData,
     this.isLoading = false,
     this.error,
   });
 
   TagsNotifierState copyWith({
-    Map<String, Map<String, String>>? tagMaps,
+    Map<String, Map<String, dynamic>>? rawTagData,
     bool? isLoading,
     String? error,
   }) {
     return TagsNotifierState(
-      tagMaps: tagMaps ?? this.tagMaps,
+      rawTagData: rawTagData ?? this.rawTagData,
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
@@ -26,7 +59,7 @@ class TagsNotifierState {
 
   factory TagsNotifierState.initial() {
     return TagsNotifierState(
-      tagMaps: {
+      rawTagData: {
         'tags1': {},
         'tags2': {},
         'tags3': {},
@@ -39,9 +72,26 @@ class TagsNotifierState {
   }
 
   // Helper method to get tag lists for specific indices
-  List<MapEntry<String, String>> getTagsForIndex(int index) {
+  List<TagEntry> getTagsForIndex(int index) {
     final docName = 'tags$index';
-    return tagMaps[docName]?.entries.toList() ?? [];
+    final data = rawTagData[docName] ?? {};
+
+    final List<TagEntry> entries = [];
+
+    data.forEach((key, value) {
+      entries.add(TagEntry.fromFirestore(key, value));
+    });
+
+    // Sort entries by order
+    entries.sort((a, b) => a.order.compareTo(b.order));
+
+    return entries;
+  }
+
+  // Get tag entries as map entries (for backward compatibility)
+  List<MapEntry<String, String>> getTagEntriesForIndex(int index) {
+    final tags = getTagsForIndex(index);
+    return tags.map((tag) => MapEntry(tag.devName, tag.displayName)).toList();
   }
 }
 
@@ -62,30 +112,22 @@ class TagsNotifier extends StateNotifier<TagsNotifierState> {
       (DocumentSnapshot snapshot) {
         if (snapshot.exists) {
           final data = snapshot.data() as Map<String, dynamic>;
-          final Map<String, String> tagMap = {};
-
-          // Convert dynamic values to String
-          data.forEach((key, value) {
-            if (value is String) {
-              tagMap[key] = value;
-            }
-          });
 
           // Update state with new data
-          final updatedTagMaps = Map<String, Map<String, String>>.from(state.tagMaps);
-          updatedTagMaps[docName] = tagMap;
+          final updatedTagMaps = Map<String, Map<String, dynamic>>.from(state.rawTagData);
+          updatedTagMaps[docName] = data;
 
           state = state.copyWith(
-            tagMaps: updatedTagMaps,
+            rawTagData: updatedTagMaps,
             isLoading: false,
           );
         } else {
           // Document doesn't exist, set empty map
-          final updatedTagMaps = Map<String, Map<String, String>>.from(state.tagMaps);
+          final updatedTagMaps = Map<String, Map<String, dynamic>>.from(state.rawTagData);
           updatedTagMaps[docName] = {};
 
           state = state.copyWith(
-            tagMaps: updatedTagMaps,
+            rawTagData: updatedTagMaps,
             isLoading: false,
           );
         }

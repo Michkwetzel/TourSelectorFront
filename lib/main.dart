@@ -84,8 +84,8 @@ class TagSelectorScreen extends ConsumerWidget {
                 ? null
                 : tagEntries.map((entry) {
                     return DropdownMenuItem(
-                      value: entry.key,
-                      child: Text(entry.value),
+                      value: entry.devName,
+                      child: Text(entry.displayName),
                     );
                   }).toList(),
             onChanged: tagEntries.isEmpty
@@ -94,13 +94,14 @@ class TagSelectorScreen extends ConsumerWidget {
                     if (value != null) {
                       ref.read(selectedTagsProvider.notifier).selectTag(index, value);
 
-                      // Print the selected tag info
-                      final tagInfo = tagEntries.firstWhere((entry) => entry.key == value);
-                      print('Selected Tag for Category $index: ${tagInfo.value} (${tagInfo.key})');
+                      // Find the selected tag
+                      final tagInfo = tagEntries.firstWhere((entry) => entry.devName == value);
+
+                      print('Selected Tag for Category $index: ${tagInfo.displayName} (${tagInfo.devName})');
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Selected: ${tagInfo.value} (${tagInfo.key})'),
+                          content: Text('Selected: ${tagInfo.displayName} (${tagInfo.devName})'),
                           duration: const Duration(seconds: 2),
                         ),
                       );
