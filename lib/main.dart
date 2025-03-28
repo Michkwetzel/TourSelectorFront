@@ -53,7 +53,8 @@ class TagSelectorScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (int i = 1; i <= 6; i++) _buildTagDropdown(context, i, tagsState, ref),
+                      for (int i = 1; i <= 6; i++)
+                        if (tagsState.shouldShowCategory(i)) _buildTagDropdown(context, i, tagsState, ref),
                     ],
                   ),
                 ),
@@ -63,15 +64,37 @@ class TagSelectorScreen extends ConsumerWidget {
   Widget _buildTagDropdown(BuildContext context, int index, TagsNotifierState state, WidgetRef ref) {
     final tagEntries = state.getTagsForIndex(index);
     final selectedTag = ref.watch(selectedTagsProvider)[index];
+    final categoryConfig = state.getCategoryConfig(index);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Category $index',
-            style: Theme.of(context).textTheme.titleMedium,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  categoryConfig.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Weight: ${categoryConfig.weight}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blue.shade800,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
@@ -97,7 +120,7 @@ class TagSelectorScreen extends ConsumerWidget {
                       // Find the selected tag
                       final tagInfo = tagEntries.firstWhere((entry) => entry.devName == value);
 
-                      print('Selected Tag for Category $index: ${tagInfo.displayName} (${tagInfo.devName})');
+                      print('Selected Tag for ${categoryConfig.title}: ${tagInfo.displayName} (${tagInfo.devName})');
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
