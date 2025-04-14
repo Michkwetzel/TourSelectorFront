@@ -246,11 +246,15 @@ class SelectedTagsNotifier extends StateNotifier<Map<int, String?>> {
         });
 
   void selectTag(int categoryIndex, String devName) {
-    state = {...state, categoryIndex: devName};
+    final newState = Map<int, String?>.from(state);
+    newState[categoryIndex] = devName;
+    state = newState;
   }
 
   void clearSelection(int categoryIndex) {
-    state = {...state, categoryIndex: null};
+    final newState = Map<int, String?>.from(state);
+    newState[categoryIndex] = null;
+    state = newState;
   }
 
   void clearAllSelections() {
@@ -262,6 +266,16 @@ class SelectedTagsNotifier extends StateNotifier<Map<int, String?>> {
       5: null,
       6: null,
     };
+  }
+
+  // Get the selected tag for a specific category
+  String? getSelectedTag(int categoryIndex) {
+    return state[categoryIndex];
+  }
+
+  // Check if any tag is selected
+  bool hasAnySelection() {
+    return state.values.any((tag) => tag != null);
   }
 }
 

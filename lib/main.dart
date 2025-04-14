@@ -1,8 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'firebase_options.dart';
 import 'tags_provider.dart';
+import 'tag_combinations_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +37,10 @@ class TagSelectorScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tagsState = ref.watch(tagsProvider);
+    final selectedTags = ref.watch(selectedTagsProvider);
+    
+    // Calculate if any selections have been made
+    bool hasSelections = selectedTags.values.any((tag) => tag != null);
 
     return Scaffold(
       appBar: AppBar(
@@ -53,8 +60,25 @@ class TagSelectorScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (int i = 1; i <= 6; i++)
-                        if (tagsState.shouldShowCategory(i)) _buildTagDropdown(context, i, tagsState, ref),
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            for (int i = 1; i <= 6; i++)
+                              if (tagsState.shouldShowCategory(i)) _buildTagDropdown(context, i, tagsState, ref),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: !hasSelections ? null : () => _submitSelections(context, ref),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('Submit Selections'),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -130,6 +154,123 @@ class TagSelectorScreen extends ConsumerWidget {
                       );
                     }
                   },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitSelections(BuildContext context, WidgetRef ref) async {
+    final tagsState = ref.read(tagsProvider);
+    final selectedTags = ref.read(selectedTagsProvider);
+    
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+    
+    try {
+      // Generate all possible tag combinations and calculate scores
+      final combinationsService = TagCombinationsService();
+      final scoredCombinations = combinationsService.generateScoredCombinations(
+        tagsState: tagsState,
+        selectedTags: selectedTags,
+      );
+      
+      print(scoredCombinations);
+      // Close loading dialog
+      Navigator.of(context).pop();
+      
+      // Send to API endpoint
+      try {
+        // final response = await _sendToApi(scoredCombinations);
+        
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Submitted ${scoredCombinations.length} combinations successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Show results in a dialog
+        _showResultsDialog(context, scoredCombinations);
+        
+      } catch (e) {
+        // Show error if API call fails
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('API Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (context.mounted) Navigator.of(context).pop();
+      
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error generating combinations: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+  
+  Future<http.Response> _sendToApi(List<Map<String, dynamic>> combinations) async {
+    // Replace with your actual API endpoint
+    const String apiUrl = 'https://your-api-endpoint.com/combinations';
+    
+    // Send the data to your API
+    final response = await http.post(
+      Uri.parse(apiUrl),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'combinations': combinations}),
+    );
+    
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit combinations: ${response.body}');
+    }
+    
+    return response;
+  }
+  
+  void _showResultsDialog(BuildContext context, List<Map<String, dynamic>> combinations) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tag Combinations'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400, // Fixed height for the dialog content
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: combinations.length > 10 ? 10 : combinations.length,
+            itemBuilder: (context, index) {
+              final combination = combinations[index];
+              final List<String> tagList = List<String>.from(combination['tags']);
+              final score = combination['score'];
+              
+              return ListTile(
+                title: Text('Score: $score'),
+                subtitle: Text('Tags: ${tagList.join(", ")}'),
+                tileColor: index % 2 == 0 ? Colors.grey.shade100 : null,
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
           ),
         ],
       ),
